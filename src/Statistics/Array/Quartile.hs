@@ -1,4 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Statistics.Array.Quartile
   ( median
@@ -8,21 +10,26 @@ module Statistics.Array.Quartile
   , bowleySkew
   ) where
 
+import Control.Monad (forM_)
+import Data.Primitive.Contiguous (Contiguous, Element, index, write)
 import Statistics.Array.Types (Quartiles(..),AscList(..))
 
+import qualified Data.Primitive.Contiguous as Arr
 import qualified Statistics.Array.Types as Asc
 
-median :: AscList a -> a
-median (AscList arr) = arr !! (length arr `div` 2)
+median :: (Contiguous arr, Element arr a)
+  => AscList arr a -> a
+median (AscList arr) = Arr.index arr (Arr.size arr `div` 2)
 
-quartiles :: AscList a -> Quartiles a
+quartiles :: (Contiguous arr, Element arr a)
+  => AscList arr a -> Quartiles a
 quartiles (AscList arr) = Quartiles
-  { q1 = arr !! (len `div` 4)
-  , q2 = arr !! (len `div` 2)
-  , q3 = arr !! (3 * len `div` 4)
+  { q1 = Arr.index arr (len `div` 4)
+  , q2 = Arr.index arr (len `div` 2)
+  , q3 = Arr.index arr (3 * len `div` 4)
   }
   where
-  len = length arr
+  len = Arr.size arr
 
 
 
@@ -41,18 +48,24 @@ quartiles (AscList arr) = Quartiles
 
 -- | Median of absolute deviations.
 -- THis is a measure of dispersion that is more robust than standard deviation.
-mad :: (Ord a, Num a) => AscList a -> a
+mad :: forall arr a.
+     (Contiguous arr, Element arr a, Ord a, Num a)
+  => AscList arr a -> a
 mad asc@(AscList arr) =
   let m = median asc
-      devs = (\x -> abs (x - m)) <$> arr
-   in median $ Asc.fromList devs
+      devs = (\x -> abs (x - m)) `Arr.map` arr :: arr a
+   in median $ Asc.fromArray devs
 
-listDerivative :: (Num a) => AscList a -> [a]
-listDerivative (AscList []) = []
-listDerivative (AscList (x0:xs)) = go x0 xs
-  where
-  go _ [] = []
-  go x (y:rest) = y - x : go y rest
+listDerivative :: (Contiguous arr, Element arr a, Num a)
+  => AscList arr a -> arr a
+listDerivative (AscList arr)
+  | Arr.null arr = Arr.empty
+  | otherwise = Arr.create $ do
+    let len' = Arr.size arr - 1
+    diffs <- Arr.new len'
+    forM_ [0 .. len' - 1] $ \i -> do
+      write diffs i (index arr (i + 1) - index arr i)
+    pure diffs
 
 bowleySkew :: (Integral a) => Quartiles a -> a
 bowleySkew Quartiles{q1,q2,q3}

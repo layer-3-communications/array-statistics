@@ -1,0 +1,8 @@
+packages: .
+
+with-compiler: ghc-8.10.4
+
+source-repository-package
+  type: git
+  location: https://github.com/andrewthad/primitive-sort
+  tag: b8426c7a0a74e246b7cdd250ead1ec4d8aace30a
