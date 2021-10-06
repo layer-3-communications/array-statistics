@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Statistics.Array.Quartile
+module Statistics.Array
   ( median
   , quartiles
   , listDerivative
@@ -15,6 +15,7 @@ import Data.Primitive.Contiguous (Contiguous, Element, index, write)
 import Statistics.Array.Types (Quartiles(..),AscList(..))
 
 import qualified Data.Primitive.Contiguous as Arr
+import qualified Data.Primitive.Sort as Arr
 import qualified Statistics.Array.Types as Asc
 
 median :: (Contiguous arr, Element arr a)
@@ -47,34 +48,33 @@ quartiles (AscList arr) = Quartiles
 
 
 -- | Median of absolute deviations.
--- THis is a measure of dispersion that is more robust than standard deviation.
+-- This is a measure of dispersion that is more robust than standard deviation.
 mad :: forall arr a.
      (Contiguous arr, Element arr a, Ord a, Num a)
   => AscList arr a -> a
 mad asc@(AscList arr) =
   let m = median asc
       devs = (\x -> abs (x - m)) `Arr.map` arr :: arr a
-   in median $ Asc.fromArray devs
+      devsAsc = Arr.sort devs
+   in median $ Asc.unsafeFromAscendingArray devsAsc
 
 listDerivative :: (Contiguous arr, Element arr a, Num a)
   => AscList arr a -> arr a
-listDerivative (AscList arr)
-  | Arr.null arr = Arr.empty
-  | otherwise = Arr.create $ do
-    let len' = Arr.size arr - 1
-    diffs <- Arr.new len'
-    forM_ [0 .. len' - 1] $ \i -> do
-      write diffs i (index arr (i + 1) - index arr i)
-    pure diffs
+listDerivative (AscList arr) = Arr.create $ do
+  let len' = Arr.size arr - 1
+  diffs <- Arr.new len'
+  forM_ [0 .. len' - 1] $ \i -> do
+    write diffs i (index arr (i + 1) - index arr i)
+  pure diffs
 
-bowleySkew :: (Integral a) => Quartiles a -> a
+bowleySkew :: (Integral a) => Quartiles a -> Double
 bowleySkew Quartiles{q1,q2,q3}
   -- the limit as q1 approaches q3 is of course dependant on the direction of approach in the 3d space {q1,q2,q3}
   -- realistically, I'm going to call this zero, since real data has no approach, and the dirac distribution has zero skew
-  | q1 == q3 = 0
+  | q1 == q3 = 0.0
   -- if `q1 == q2`, then skew simplifies to `(q3 - q1) / (q3 - q1)`, or `1`
-  | q2 == q1 = 1
+  | q2 == q1 = 1.0
   -- similarly, if `q2 == q3`, then skew simplifies to `-1`
-  | q2 == q3 = -1
+  | q2 == q3 = -1.0
   -- I'm not sure if either of those situations are reliable indicators of skew, though
-  | otherwise = (q3 + q1 - 2*q2) `div` (q3 - q1)
+  | otherwise = (realToFrac $ q3 + q1 - 2*q2) / (realToFrac $ q3 - q1)

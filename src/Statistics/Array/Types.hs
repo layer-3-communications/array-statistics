@@ -16,23 +16,29 @@ import qualified Data.Primitive.Contiguous as Arr
 import qualified Data.Primitive.Sort as Arr
 
 
--- | A list with data in ascending order.
+-- | A non-empty list with data in ascending order.
 --
 -- I am keeping the implementation under-the-hood, as there are certainly better
 -- ways to represent this data than an actual linked list.
 newtype AscList arr e = AscList (arr e)
 
-fromArray :: (Contiguous arr, Element arr e, Ord e) => arr e -> AscList arr e
-fromArray = AscList . Arr.sort
+fromArray :: (Contiguous arr, Element arr e, Ord e) => arr e -> Maybe (AscList arr e)
+fromArray xs
+  | Arr.null xs = Nothing
+  | otherwise = Just . AscList . Arr.sort $ xs
 
+-- | Unsafe because if the input array is empty or not sorted ascending, functions
+-- operating on the resulting 'AscList' may (will) produce incorrect results.
 unsafeFromAscendingArray :: (Contiguous arr, Element arr e) => arr e -> AscList arr e
 unsafeFromAscendingArray = AscList
 
 fromList :: forall arr e.
-  (Contiguous arr, Element arr e, Ord e) => [e] -> AscList arr e
-fromList = AscList . Arr.sort . Arr.fromList -- WARNING super inefficent, but hey... you're using lists, scrub
+  (Contiguous arr, Element arr e, Ord e) => [e] -> Maybe (AscList arr e)
+fromList xs
+  | null xs = Nothing
+  | otherwise = Just . AscList . Arr.sort . Arr.fromList $ xs -- WARNING inefficent, but hey... you're using lists, scrub
 
--- | Unsafe because if the input list is not sorted ascending, functions
+-- | Unsafe because if the input list is empty or not sorted ascending, functions
 -- operating on the resulting 'AscList' may (will) produce incorrect results.
 unsafeFromAscendingList :: forall arr e.
   (Contiguous arr, Element arr e) => [e] -> AscList arr e
@@ -43,3 +49,4 @@ data Quartiles a = Quartiles
   , q2 :: a
   , q3 :: a
   }
+  deriving (Show, Eq)
