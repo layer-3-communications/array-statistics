@@ -21,8 +21,8 @@ library
   -- other-modules:
   build-depends:
     , base >=4.11.1
-    , contiguous >=0.6.1
-    , primitive-sort
+    , contiguous >=0.5 && <0.6
+    , primitive-sort ==0.1.0.0
   default-language: Haskell2010
   ghc-options: -O2 -Wall -Wunticked-promoted-constructors
 
