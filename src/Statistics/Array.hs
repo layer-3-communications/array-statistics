@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -11,19 +12,25 @@ module Statistics.Array
   ) where
 
 import Control.Monad (forM_)
-import Data.Primitive.Contiguous (Contiguous, Element, index, write)
+import Data.Int (Int64)
+import Data.Primitive (Prim,PrimArray)
+import Data.Primitive.Contiguous (index, write)
 import Statistics.Array.Types (Quartiles(..),AscList(..))
 
 import qualified Data.Primitive.Contiguous as Arr
 import qualified Data.Primitive.Sort as Arr
 import qualified Statistics.Array.Types as Asc
 
-median :: (Contiguous arr, Element arr a)
-  => AscList arr a -> a
+median :: Prim a
+  => AscList a -> a
+{-# inlineable median #-}
+{-# specialize median :: AscList Int -> Int #-}
+{-# specialize median :: AscList Int64 -> Int64 #-}
+{-# specialize median :: AscList Double -> Double #-}
 median (AscList arr) = Arr.index arr (Arr.size arr `div` 2)
 
-quartiles :: (Contiguous arr, Element arr a)
-  => AscList arr a -> Quartiles a
+quartiles :: Prim a
+  => AscList a -> Quartiles a
 quartiles (AscList arr) = Quartiles
   { q1 = Arr.index arr (len `div` 4)
   , q2 = Arr.index arr (len `div` 2)
@@ -49,25 +56,40 @@ quartiles (AscList arr) = Quartiles
 
 -- | Median of absolute deviations.
 -- This is a measure of dispersion that is more robust than standard deviation.
-mad :: forall arr a.
-     (Contiguous arr, Element arr a, Ord a, Num a)
-  => AscList arr a -> a
+mad :: forall a.
+     (Prim a, Ord a, Num a)
+  => AscList a -> a
+{-# inlineable mad #-}
+{-# specialize mad :: AscList Int -> Int #-}
+{-# specialize mad :: AscList Int64 -> Int64 #-}
+{-# specialize mad :: AscList Double -> Double #-}
 mad asc@(AscList arr) =
   let m = median asc
-      devs = (\x -> abs (x - m)) `Arr.map` arr :: arr a
+      devs = (\x -> abs (x - m)) `Arr.map` arr :: PrimArray a
       devsAsc = Arr.sort devs
    in median $ Asc.unsafeFromAscendingArray devsAsc
 
-listDerivative :: (Contiguous arr, Element arr a, Num a)
-  => AscList arr a -> arr a
+-- | Take the difference between adjacent elements. Resulting array has
+-- length one less than the argument array.
+listDerivative :: (Prim a, Num a)
+  => AscList a -> PrimArray a
+{-# inlineable listDerivative #-}
+{-# specialize listDerivative :: AscList Int -> PrimArray Int #-}
+{-# specialize listDerivative :: AscList Int64 -> PrimArray Int64 #-}
+{-# specialize listDerivative :: AscList Double -> PrimArray Double #-}
 listDerivative (AscList arr) = Arr.create $ do
   let len' = Arr.size arr - 1
   diffs <- Arr.new len'
-  forM_ [0 .. len' - 1] $ \i -> do
-    write diffs i (index arr (i + 1) - index arr i)
-  pure diffs
+  let go !dstIx !prevElement = if dstIx < len'
+        then do
+          let !currentElement = index arr (dstIx + 1)
+          write diffs dstIx (currentElement - prevElement)
+          go (dstIx + 1) currentElement
+        else pure diffs
+  go 0 (index arr 0)
 
 bowleySkew :: (Integral a) => Quartiles a -> Double
+{-# inline bowleySkew #-}
 bowleySkew Quartiles{q1,q2,q3}
   -- the limit as q1 approaches q3 is of course dependant on the direction of approach in the 3d space {q1,q2,q3}
   -- realistically, I'm going to call this zero, since real data has no approach, and the dirac distribution has zero skew
