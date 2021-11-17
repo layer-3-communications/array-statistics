@@ -5,11 +5,15 @@
 
 module Statistics.Array
   ( median
+  , minimum
+  , maximum
   , quartiles
   , listDerivative
   , mad
   , bowleySkew
   ) where
+
+import Prelude hiding (minimum,maximum)
 
 import Control.Monad (forM_)
 import Data.Int (Int64)
@@ -21,6 +25,7 @@ import qualified Data.Primitive.Contiguous as Arr
 import qualified Data.Primitive.Sort as Arr
 import qualified Statistics.Array.Types as Asc
 
+-- | @O(1)@ Median element.
 median :: Prim a
   => AscList a -> a
 {-# inlineable median #-}
@@ -28,6 +33,24 @@ median :: Prim a
 {-# specialize median :: AscList Int64 -> Int64 #-}
 {-# specialize median :: AscList Double -> Double #-}
 median (AscList arr) = Arr.index arr (Arr.size arr `div` 2)
+
+-- | @O(1)@ Minimum element.
+minimum :: Prim a
+  => AscList a -> a
+{-# inlineable minimum #-}
+{-# specialize minimum :: AscList Int -> Int #-}
+{-# specialize minimum :: AscList Int64 -> Int64 #-}
+{-# specialize minimum :: AscList Double -> Double #-}
+minimum (AscList arr) = Arr.index arr 0
+
+-- | @O(1)@ Maximum element.
+maximum :: Prim a
+  => AscList a -> a
+{-# inlineable maximum #-}
+{-# specialize maximum :: AscList Int -> Int #-}
+{-# specialize maximum :: AscList Int64 -> Int64 #-}
+{-# specialize maximum :: AscList Double -> Double #-}
+maximum (AscList arr) = Arr.index arr (Arr.size arr - 1)
 
 quartiles :: Prim a
   => AscList a -> Quartiles a
